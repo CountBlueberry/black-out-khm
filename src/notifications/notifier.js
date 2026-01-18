@@ -6,7 +6,6 @@ const { wasSent, markSent, cleanupOld } = require('../db/sentEventsRepo');
 const KYIV_TZ = 'Europe/Kyiv';
 
 const minuteKey = (dt) => dt.setZone(KYIV_TZ).toFormat('yyyy-LL-dd HH:mm');
-
 const buildEventId = (chatId, queue, dateIso, type, atIso) => `${chatId}|${queue}|${dateIso}|${type}|${atIso}`;
 
 const parseToDateTime = (dateIso, timeStr) => {
@@ -35,7 +34,17 @@ const isWithinQuietHours = (now, quiet) => {
     return nowM >= startM || nowM < endM;
 };
 
-const shouldFireNow = (nowMinute, target) => minuteKey(target) === nowMinute;
+const shouldFireNearNow = (now, target) => {
+    const diffMs = now.toMillis() - target.toMillis();
+    return diffMs >= -30 * 1000 && diffMs <= 60 * 1000;
+};
+
+const shouldFireWithCatchup = (nowMinute, now, target, catchupMinutes) => {
+    if (minuteKey(target) === nowMinute) return true;
+
+    const diffMinutes = now.diff(target, 'minutes').minutes;
+    return diffMinutes > 0 && diffMinutes <= catchupMinutes;
+};
 
 const normalizeIntervals = (payload) => {
     const outages = payload?.outages ?? [];
@@ -94,6 +103,12 @@ const createNotifier = ({ bot, listAllSubscriptions }) => {
                 const prefs = getPrefs(chatId);
                 const lead = prefs.leadMinutes;
 
+                // Catch-up window:
+                // - BEFORE: allow up to 5 minutes late (process restart / drift)
+                // - START/END: allow up to 2 minutes late
+                const catchupBeforeMinutes = 5;
+                const catchupStartEndMinutes = 2;
+
                 for (const queue of queues) {
                     const payloadToday = await getPayload(queue, today);
                     const payloadTomorrow = await getPayload(queue, tomorrow);
@@ -117,65 +132,83 @@ const createNotifier = ({ bot, listAllSubscriptions }) => {
 
                             const before = start.minus({ minutes: lead });
 
-                            if (prefs.notifyBefore && shouldFireNow(nowMinute, before)) {
-                                if (isWithinQuietHours(now, prefs.quiet)) continue;
+                            if (prefs.notifyBefore) {
+                                const shouldFire =
+                                    shouldFireNearNow(now, before) ||
+                                    shouldFireWithCatchup(nowMinute, now, before, catchupBeforeMinutes);
 
-                                const id = buildEventId(chatId, queue, day.dateIso, 'BEFORE', before.toISO());
-                                if (wasSent(id)) continue;
+                                if (shouldFire) {
+                                    if (isWithinQuietHours(now, prefs.quiet)) continue;
 
-                                await bot.telegram.sendMessage(
-                                    chatId,
-                                    `⏳ Підчерга ${queue}: через ${lead} хв буде відключення (${start.toFormat('HH:mm')}–${end.toFormat('HH:mm')}).`
-                                );
+                                    const id = buildEventId(chatId, queue, day.dateIso, 'BEFORE', before.toISO());
+                                    if (!wasSent(id)) {
+                                        await bot.telegram.sendMessage(
+                                            chatId,
+                                            `⏳ Підчерга ${queue}: через ${lead} хв буде відключення (${start.toFormat('HH:mm')}–${end.toFormat('HH:mm')}).`
+                                        );
 
-                                markSent({
-                                    eventId: id,
-                                    chatId,
-                                    queue,
-                                    type: 'BEFORE',
-                                    scheduledAt: before.toISO(),
-                                });
+                                        markSent({
+                                            eventId: id,
+                                            chatId,
+                                            queue,
+                                            type: 'BEFORE',
+                                            scheduledAt: before.toISO(),
+                                        });
+                                    }
+                                }
                             }
 
-                            if (prefs.notifyStart && shouldFireNow(nowMinute, start)) {
-                                if (isWithinQuietHours(now, prefs.quiet)) continue;
+                            if (prefs.notifyStart) {
+                                const shouldFire =
+                                    shouldFireNearNow(now, start) ||
+                                    shouldFireWithCatchup(nowMinute, now, start, catchupStartEndMinutes);
 
-                                const id = buildEventId(chatId, queue, day.dateIso, 'START', start.toISO());
-                                if (wasSent(id)) continue;
+                                if (shouldFire) {
+                                    if (isWithinQuietHours(now, prefs.quiet)) continue;
 
-                                await bot.telegram.sendMessage(
-                                    chatId,
-                                    `🔌 Підчерга ${queue}: відключення почалось (${start.toFormat('HH:mm')}–${end.toFormat('HH:mm')}).`
-                                );
+                                    const id = buildEventId(chatId, queue, day.dateIso, 'START', start.toISO());
+                                    if (!wasSent(id)) {
+                                        await bot.telegram.sendMessage(
+                                            chatId,
+                                            `🔌 Підчерга ${queue}: відключення почалось (${start.toFormat('HH:mm')}–${end.toFormat('HH:mm')}).`
+                                        );
 
-                                markSent({
-                                    eventId: id,
-                                    chatId,
-                                    queue,
-                                    type: 'START',
-                                    scheduledAt: start.toISO(),
-                                });
+                                        markSent({
+                                            eventId: id,
+                                            chatId,
+                                            queue,
+                                            type: 'START',
+                                            scheduledAt: start.toISO(),
+                                        });
+                                    }
+                                }
                             }
 
-                            if (prefs.notifyEnd && shouldFireNow(nowMinute, end)) {
-                                if (isWithinQuietHours(now, prefs.quiet)) continue;
+                            if (prefs.notifyEnd) {
+                                const shouldFire =
+                                    shouldFireNearNow(now, end) ||
+                                    shouldFireWithCatchup(nowMinute, now, end, catchupStartEndMinutes);
 
-                                const endDateIso = end.toFormat('yyyy-LL-dd');
-                                const id = buildEventId(chatId, queue, endDateIso, 'END', end.toISO());
-                                if (wasSent(id)) continue;
+                                if (shouldFire) {
+                                    if (isWithinQuietHours(now, prefs.quiet)) continue;
 
-                                await bot.telegram.sendMessage(
-                                    chatId,
-                                    `✅ Підчерга ${queue}: відключення завершилось (мало з’явитись світло).`
-                                );
+                                    const endDateIso = end.toFormat('yyyy-LL-dd');
+                                    const id = buildEventId(chatId, queue, endDateIso, 'END', end.toISO());
+                                    if (!wasSent(id)) {
+                                        await bot.telegram.sendMessage(
+                                            chatId,
+                                            `✅ Підчерга ${queue}: відключення завершилось (мало з’явитись світло).`
+                                        );
 
-                                markSent({
-                                    eventId: id,
-                                    chatId,
-                                    queue,
-                                    type: 'END',
-                                    scheduledAt: end.toISO(),
-                                });
+                                        markSent({
+                                            eventId: id,
+                                            chatId,
+                                            queue,
+                                            type: 'END',
+                                            scheduledAt: end.toISO(),
+                                        });
+                                    }
+                                }
                             }
                         }
                     }
