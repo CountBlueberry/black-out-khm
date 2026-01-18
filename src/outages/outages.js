@@ -3,7 +3,7 @@ const cheerio = require('cheerio');
 
 const OUTAGES_URL = 'https://hoe.com.ua/page/pogodinni-vidkljuchennja';
 
-const normalizeSpaces = (s) => s.replace(/\s+/g, ' ').trim();
+const normalizeSpaces = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
 
 const normalizeTime = (t) => {
     if (t === '24:00') return { time: '00:00', nextDay: true };
@@ -24,7 +24,7 @@ const kyivDateISO = (offsetDays = 0) => {
 const parseDateFromAlt = (alt) => {
     const t = String(alt ?? '').trim();
 
-    // "ГПВ-27.12.25" або "ГПВ-27.12.2025"
+    // "ГПВ-27.12.25" або "ГПВ-27.12.2025" або "ГПВ-18.01.26-"
     const m = t.match(/ГПВ-(\d{2})\.(\d{2})\.(\d{2}|\d{4})/i);
     if (!m) return null;
 
@@ -38,8 +38,6 @@ const parseDateFromAlt = (alt) => {
 };
 
 const findNextUlAfter = ($, imgEl) => {
-    // imgEl — це cheerio-об'єкт <img>
-    // Переходимо до контейнера (зазвичай <p>), щоб іти далі по документу
     const startBlock = imgEl.closest('p').length ? imgEl.closest('p') : imgEl.parent();
 
     let el = startBlock.next();
@@ -50,8 +48,7 @@ const findNextUlAfter = ($, imgEl) => {
         const nestedUl = el.find('ul');
         if (nestedUl.length > 0) return nestedUl.first();
 
-        // якщо дійшли до наступної картинки — stop (це вже інший блок графіка)
-        if (el.find('img').length > 0 || el.is('p') && el.find('img').length > 0) return null;
+        if ((el.is('p') && el.find('img').length > 0) || el.find('img').length > 0) return null;
 
         el = el.next();
     }
@@ -59,37 +56,163 @@ const findNextUlAfter = ($, imgEl) => {
     return null;
 };
 
+const extractTextFromNode = ($, node) => {
+    if (!node || !node.length) return '';
+    return normalizeSpaces($(node).text());
+};
+
+const isAdjustmentLi = (text) => {
+    const t = normalizeSpaces(text).toLowerCase();
+    return (
+        t.includes('підчерг') ||
+        t.includes('підчерги') ||
+        t.includes('підчергу') ||
+        t.includes('відключ') ||
+        t.includes('знеструм') ||
+        t.includes('заживлен')
+    );
+};
+
+const isLikelyAdjustmentParagraph = (text) => {
+    const t = normalizeSpaces(text).toLowerCase();
+    if (!t) return false;
+    return (
+        t.includes('збільшення обсягу погодинних відключень') ||
+        t.includes('ще одне збільшення') ||
+        t.includes('відповідно') ||
+        t.includes('розпорядження') ||
+        t.includes('укренерго') ||
+        t.includes('збільшено обсяг погодинних відключень')
+    );
+};
+
+const parseAdjustmentLine = (line, sectionTitle) => {
+    const text = normalizeSpaces(line);
+    const lower = text.toLowerCase();
+
+    const queues = (text.match(/\d+\.\d+/g) || []).map((q) => String(q));
+    if (queues.length === 0) return null;
+
+    const timeMatch = text.match(/(\d{2}:\d{2})/);
+    if (!timeMatch) return null;
+
+    const time = timeMatch[1];
+
+    let kind = null;
+
+    if (/(заживлен)/i.test(lower) && /(розпоч)/i.test(lower) && /о\s*\d{2}:\d{2}/i.test(lower)) {
+        kind = 'power_on_at';
+    } else if (/(триватиме\s*до)/i.test(lower) || /\bдо\s*\d{2}:\d{2}\b/i.test(lower)) {
+        kind = 'end_at';
+    } else if (/(розпоч)/i.test(lower) || /(знеструмлен)/i.test(lower) || /о\s*\d{2}:\d{2}/i.test(lower)) {
+        kind = 'start_at';
+    }
+
+    if (!kind) return null;
+
+    return {
+        queues,
+        kind,
+        time,
+        text,
+        sectionTitle: sectionTitle ? normalizeSpaces(sectionTitle) : undefined,
+    };
+};
+
+const extractAdjustmentsBeforeImg = ($, imgEl) => {
+    const img = $(imgEl);
+    const startBlock = img.closest('p').length ? img.closest('p') : img.parent();
+
+    const items = [];
+    let el = startBlock.prev();
+
+    while (el && el.length) {
+        const elHasImg = el.find('img').length > 0 || (el.is('p') && el.find('img').length > 0);
+        if (elHasImg) break;
+
+        if (el.is('hr')) {
+            el = el.prev();
+            continue;
+        }
+
+        if (el.is('ul')) {
+            const lis = [];
+            el.find('li').each((_, li) => {
+                const liText = normalizeSpaces($(li).text());
+                if (isAdjustmentLi(liText)) lis.push(liText);
+            });
+
+            if (lis.length > 0) {
+                let sectionTitle = null;
+
+                const prev = el.prev();
+                if (prev && prev.length && prev.is('p')) {
+                    const pText = extractTextFromNode($, prev);
+                    if (isLikelyAdjustmentParagraph(pText)) sectionTitle = pText;
+                }
+
+                items.unshift({ sectionTitle, lis });
+            }
+
+            el = el.prev();
+            continue;
+        }
+
+        el = el.prev();
+    }
+
+    const adjustments = [];
+
+    for (const block of items) {
+        for (const li of block.lis) {
+            const adj = parseAdjustmentLine(li, block.sectionTitle);
+            if (adj) adjustments.push(adj);
+        }
+    }
+
+    return adjustments;
+};
 
 const parseUlToSchedule = (ul) => {
-    const lines = [];
-    ul.find('li').each((_, el) => {
-        const text = normalizeSpaces(ul.find(el).text());
-        if (text.toLowerCase().includes('підчерга')) lines.push(text);
-    });
-
-    const re = /підчерга\s+(\d+\.\d+)\s*[–-]\s*з\s*(\d{2}:\d{2})\s*до\s*(\d{2}:\d{2})/i;
-
     const schedule = {};
 
-    for (const line of lines) {
-        const m = line.match(re);
-        if (!m) continue;
+    const getQueue = (text) => {
+        const m = text.match(/(\d+\.\d+)/);
+        return m ? m[1] : null;
+    };
 
-        const queue = m[1];
-        const fromRaw = m[2];
-        const toRaw = m[3];
+    ul.find('li').each((_, el) => {
+        const text = normalizeSpaces(ul.find(el).text());
+        const lower = text.toLowerCase();
+        if (!lower.includes('підчерг')) return;
 
-        const fromN = normalizeTime(fromRaw);
-        const toN = normalizeTime(toRaw);
+        const queue = getQueue(text);
+        if (!queue) return;
+
+        const reRange = /з\s*(\d{2}:\d{2})\s*до\s*(\d{2}:\d{2})/gi;
+        const ranges = [];
+
+        let m;
+        while ((m = reRange.exec(text)) !== null) {
+            ranges.push({ fromRaw: m[1], toRaw: m[2] });
+        }
+
+        if (ranges.length === 0) return;
 
         if (!schedule[queue]) schedule[queue] = [];
-        schedule[queue].push({
-            from: fromN.time,
-            to: toN.time,
-            toNextDay: toN.nextDay,
-            raw: line,
-        });
-    }
+
+        for (const r of ranges) {
+            const fromN = normalizeTime(r.fromRaw);
+            const toN = normalizeTime(r.toRaw);
+
+            schedule[queue].push({
+                from: fromN.time,
+                to: toN.time,
+                toNextDay: toN.nextDay,
+                raw: text,
+            });
+        }
+    });
 
     return schedule;
 };
@@ -111,15 +234,15 @@ const parseOutagesFromHtml = (html) => {
         const ul = findNextUlAfter($, img);
         if (!ul) continue;
 
-        const schedule = parseUlToSchedule(ul);
-
         if (seenDates.has(date)) continue;
         seenDates.add(date);
 
-        schedulesByDate.push({ date, schedule });
+        const schedule = parseUlToSchedule(ul);
+        const adjustments = extractAdjustmentsBeforeImg($, imgEl);
+
+        schedulesByDate.push({ date, schedule, adjustments });
     }
 
-    // сортуємо по даті спаданням (новіші зверху)
     schedulesByDate.sort((a, b) => String(b.date).localeCompare(String(a.date)));
 
     return { schedulesByDate };
@@ -147,11 +270,17 @@ const getScheduleForQueue = async (queue) => {
     const { schedulesByDate } = await fetchOutageSchedule();
 
     const resultSchedules = schedulesByDate
-        .map((s) => ({
-            date: s.date,
-            outages: s.schedule[queue] ?? [],
-        }))
-        .filter((s) => s.outages.length > 0);
+        .map((s) => {
+            const outages = s.schedule[queue] ?? [];
+            const adjustments = (s.adjustments ?? []).filter((a) => (a.queues ?? []).includes(String(queue)));
+
+            return {
+                date: s.date,
+                outages,
+                adjustments,
+            };
+        })
+        .filter((s) => s.outages.length > 0 || s.adjustments.length > 0);
 
     return {
         ok: true,
@@ -162,4 +291,5 @@ const getScheduleForQueue = async (queue) => {
     };
 };
 
-module.exports = { getScheduleForQueue, kyivDateISO };
+module.exports = { getScheduleForQueue, kyivDateISO, parseOutagesFromHtml };
+

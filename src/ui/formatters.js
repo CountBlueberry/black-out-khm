@@ -4,10 +4,10 @@ const formatDateUa = (isoDate) => {
     return `${d}.${m}.${y}`;
 };
 
-const formatOutageLine = (o) => {
-    const end = o.toNextDay ? `${o.to} (+1 день)` : o.to;
-    return `${o.from}–${end}`;
-};
+const formatOutageLine = (o) =>
+    o.toNextDay
+        ? `${o.from}–${o.to} (наступного дня)`
+        : `${o.from}–${o.to}`;
 
 const formatScheduleMessage = ({ queue, schedules }) => {
     if (!schedules || schedules.length === 0) {
@@ -31,7 +31,7 @@ const formatMultiQueueMessage = ({ day, dayIso, results }) => {
     const lines = [];
     lines.push(day === 'tomorrow' ? `Графік на завтра (${formatDateUa(dayIso)}):` : `Графік на сьогодні (${formatDateUa(dayIso)}):`);
 
-    const hasAny = results.some((r) => r.schedules && r.schedules.some((s) => s.outages.length > 0));
+    const hasAny = results.some((r) => r.schedules && r.schedules.some((s) => (s.outages || []).length > 0));
 
     if (!hasAny) {
         lines.push('\nВідключень для твоїх черг не знайдено.');

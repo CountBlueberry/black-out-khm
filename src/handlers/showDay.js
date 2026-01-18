@@ -1,4 +1,5 @@
-const { getScheduleForQueue, kyivDateISO } = require('../outages/outages');
+const { kyivDateISO } = require('../outages/outages');
+const { getScheduleForQueue } = require('../outages/provider');
 const { listQueues } = require('../db/subscriptionsRepo');
 const { refreshKeyboard, mainMenu } = require('../ui/keyboards');
 const { formatMultiQueueMessage } = require('../ui/formatters');
@@ -8,8 +9,8 @@ const buildSchedulesForQueues = async (queues, day) => {
 
     const results = [];
     for (const q of queues) {
-        const data = await getScheduleForQueue(q);
-        const schedules = (data.schedules ?? []).filter((s) => s.date === dayIso);
+        const data = await getScheduleForQueue(q, dayIso);
+        const schedules = data.schedules ?? [];
         results.push({ queue: q, schedules });
     }
 

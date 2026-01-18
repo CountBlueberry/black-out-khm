@@ -7,7 +7,7 @@ const defaultPrefs = () => ({
     notifyBefore: true,
     notifyStart: true,
     notifyEnd: true,
-    quiet: { enabled: false, start: '22:00', end: '08:00' },
+    quiet: { enabled: true, start: '22:00', end: '08:00' },
 });
 
 const getPrefs = (chatId) => {

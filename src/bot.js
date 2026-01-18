@@ -5,10 +5,15 @@ const { createNotifier } = require('./notifications/notifier');
 const { notifySettingsKeyboard, quietKeyboard, leadKeyboard, mainMenu } = require('./ui/keyboards');
 
 const { getPrefs, updatePrefs } = require('./db/prefsRepo');
+const { startOutagesJob } = require('./outages/refresher');
 const { addQueue, removeQueue, listQueues, listAllSubscriptions } = require('./db/subscriptionsRepo');
 
 const { migrate } = require('./db/db');
 migrate();
+
+if (!process.env.BOT_TOKEN) {
+    throw new Error('BOT_TOKEN is not set');
+}
 
 const bot = new Telegraf(process.env.BOT_TOKEN);
 const pendingQuietByChatId = new Map();
@@ -257,6 +262,17 @@ bot.on('text', async (ctx, next) => {
 
 registerManageQueuesHandlers(bot);
 
+const stopOutagesJob = startOutagesJob({
+    intervalMs: 30 * 60 * 1000,
+    runOnStart: true,
+    onError: (e) => {
+        console.error('[outages-job] error:', e);
+    },
+    onChange: (res) => {
+        console.log('[outages-job] updated:', res);
+    },
+});
+
 const notifier = createNotifier({
     bot,
     listAllSubscriptions,
@@ -266,5 +282,11 @@ notifier.start();
 
 bot.launch();
 
-process.once('SIGINT', () => bot.stop('SIGINT'));
-process.once('SIGTERM', () => bot.stop('SIGTERM'));
+process.once('SIGINT', () => {
+    stopOutagesJob();
+    bot.stop('SIGINT');
+});
+process.once('SIGTERM', () => {
+    stopOutagesJob();
+    bot.stop('SIGTERM');
+});
