@@ -23,6 +23,7 @@ const refreshKeyboard = (day) => Markup.inlineKeyboard([
     [Markup.button.callback('Мої черги', 'SHOW:myqueues')],
     [Markup.button.callback('Керувати чергами', 'MANAGE_QUEUES')],
     [Markup.button.callback('⏳ Попередження', 'OPEN_LEAD')],
+    [Markup.button.callback('⚙️ Налаштування', 'OPEN_SETTINGS')],
 ]);
 
 const queuesKeyboard = (selectedQueues) => {
