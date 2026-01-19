@@ -15,6 +15,10 @@ const mainMenu = () => Markup.inlineKeyboard([
     [Markup.button.callback('Керувати чергами', 'MANAGE_QUEUES')],
     [Markup.button.callback('⏳ Попередження', 'OPEN_LEAD')],
     [Markup.button.callback('⚙️ Налаштування', 'OPEN_SETTINGS')],
+    [
+        Markup.button.callback('💛 Підтримати розробника', 'OPEN_DONATE'),
+        Markup.button.url('🇺🇦 Донат на ЗСУ', 'https://send.monobank.ua/jar/2JbpBYkhMv'),
+    ],
 ]);
 
 const refreshKeyboard = (day) => Markup.inlineKeyboard([
@@ -24,6 +28,10 @@ const refreshKeyboard = (day) => Markup.inlineKeyboard([
     [Markup.button.callback('Керувати чергами', 'MANAGE_QUEUES')],
     [Markup.button.callback('⏳ Попередження', 'OPEN_LEAD')],
     [Markup.button.callback('⚙️ Налаштування', 'OPEN_SETTINGS')],
+    [
+        Markup.button.callback('💛 Підтримати розробника', 'OPEN_DONATE'),
+        Markup.button.url('🇺🇦 Донат на ЗСУ', 'https://send.monobank.ua/jar/2JbpBYkhMv'),
+    ],
 ]);
 
 const queuesKeyboard = (selectedQueues) => {

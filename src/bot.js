@@ -245,6 +245,31 @@ bot.action('QUIET_CUSTOM', async (ctx) => {
     await ctx.reply('Введи період у форматі: 22:00-08:00');
 });
 
+bot.action('OPEN_DONATE', async (ctx) => {
+    await ctx.answerCbQuery();
+
+    const text =
+        `💛 Підтримка\n\n` +
+        `Цей бот створений і підтримується добровільно, щоб допомагати орієнтуватись у відключеннях.\n\n` +
+        `Якщо хочеш підтримати розробника — буду вдячний 💙\n` +
+        `Але ще краще — задонать на русоріз 🇺🇦\n` +
+        `Щоб одного дня такі боти просто стали не потрібні.\n\n` +
+        `Дякую за підтримку!`;
+
+    await ctx.reply(
+        text,
+        {
+            reply_markup: {
+                inline_keyboard: [
+                    [{ text: '💛 Підтримати розробника', url: 'https://donatello.to/VladyslavYurovskyi' }],
+                    [{ text: '🇺🇦 Донат на ЗСУ', url: 'https://send.monobank.ua/jar/2JbpBYkhMv' }],
+                    [{ text: '⬅️ Назад', callback_data: 'BACK_MAIN' }],
+                ],
+            },
+        }
+    );
+});
+
 bot.on('text', async (ctx, next) => {
     const pending = pendingQuietByChatId.get(ctx.chat.id);
     if (!pending) return next();
