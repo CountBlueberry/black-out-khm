@@ -1,12 +1,16 @@
 const { Telegraf } = require('telegraf');
+
 const { handleShowDay } = require('./handlers/showDay');
 const { registerManageQueuesHandlers } = require('./handlers/manageQueues');
 const { createNotifier } = require('./notifications/notifier');
+
 const { notifySettingsKeyboard, quietKeyboard, leadKeyboard, mainMenu } = require('./ui/keyboards');
 
 const { getPrefs, updatePrefs } = require('./db/prefsRepo');
 const { startOutagesJob } = require('./outages/refresher');
 const { addQueue, removeQueue, listQueues, listAllSubscriptions } = require('./db/subscriptionsRepo');
+
+const { createOutagesChangeNotifier } = require('./services/outagesChangeNotifier');
 
 const { migrate } = require('./db/db');
 migrate();
@@ -256,19 +260,28 @@ bot.action('OPEN_DONATE', async (ctx) => {
         `Щоб одного дня такі боти просто стали не потрібні.\n\n` +
         `Дякую за підтримку!`;
 
-    await ctx.reply(
-        text,
-        {
-            reply_markup: {
-                inline_keyboard: [
-                    [{ text: '💛 Підтримати розробника', url: 'https://donatello.to/VladyslavYurovskyi' }],
-                    [{ text: '🇺🇦 Донат на ЗСУ', url: 'https://send.monobank.ua/jar/2JbpBYkhMv' }],
-                    [{ text: '⬅️ Назад', callback_data: 'BACK_MAIN' }],
-                ],
-            },
-        }
-    );
+    await ctx.reply(text, {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: '💛 Підтримати розробника', url: 'https://donatello.to/VladyslavYurovskyi' }],
+                [{ text: '🇺🇦 Донат на ЗСУ', url: 'https://send.monobank.ua/jar/2JbpBYkhMv' }],
+                [{ text: '⬅️ Назад', callback_data: 'BACK_MAIN' }],
+            ],
+        },
+    });
 });
+
+bot.action('BACK_MAIN', async (ctx) => {
+    await ctx.answerCbQuery();
+    try {
+        await ctx.editMessageText('Меню:', mainMenu());
+    } catch (e) {
+        const description = e?.response?.description ?? e?.description ?? e?.message ?? '';
+        if (String(description).toLowerCase().includes('message is not modified')) return;
+        await ctx.reply('Меню:', mainMenu());
+    }
+});
+
 
 bot.on('text', async (ctx, next) => {
     const pending = pendingQuietByChatId.get(ctx.chat.id);
@@ -298,14 +311,23 @@ bot.on('text', async (ctx, next) => {
 
 registerManageQueuesHandlers(bot);
 
+const outagesChangeNotifier = createOutagesChangeNotifier({
+    bot,
+    listAllSubscriptions,
+});
+
 const stopOutagesJob = startOutagesJob({
     intervalMs: 15 * 60 * 1000,
     runOnStart: true,
     onError: (e) => {
         console.error('[outages-job] error:', e);
     },
-    onChange: (res) => {
-        console.log('[outages-job] updated:', res);
+    onChange: async (res) => {
+        try {
+            await outagesChangeNotifier.handleJobResult(res);
+        } catch (e) {
+            console.error('[outages-job] handleJobResult error:', e);
+        }
     },
 });
 
