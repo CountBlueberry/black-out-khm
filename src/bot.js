@@ -299,7 +299,7 @@ bot.on('text', async (ctx, next) => {
 registerManageQueuesHandlers(bot);
 
 const stopOutagesJob = startOutagesJob({
-    intervalMs: 30 * 60 * 1000,
+    intervalMs: 15 * 60 * 1000,
     runOnStart: true,
     onError: (e) => {
         console.error('[outages-job] error:', e);

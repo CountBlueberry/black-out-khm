@@ -11,27 +11,31 @@ const ALL_QUEUES = [
 
 const mainMenu = () => Markup.inlineKeyboard([
     [Markup.button.callback('Сьогодні', 'SHOW:today'), Markup.button.callback('Завтра', 'SHOW:tomorrow')],
-    [Markup.button.callback('Мої черги', 'SHOW:myqueues')],
-    [Markup.button.callback('Керувати чергами', 'MANAGE_QUEUES')],
-    [Markup.button.callback('⏳ Попередження', 'OPEN_LEAD')],
-    [Markup.button.callback('⚙️ Налаштування', 'OPEN_SETTINGS')],
     [
-        Markup.button.callback('💛 Підтримати розробника', 'OPEN_DONATE'),
-        Markup.button.url('🇺🇦 Донат на ЗСУ', 'https://send.monobank.ua/jar/2JbpBYkhMv'),
+        Markup.button.callback('Мої черги', 'SHOW:myqueues'),
+        Markup.button.callback('Керувати чергами', 'MANAGE_QUEUES')
     ],
+    [
+        Markup.button.callback('⏳ Попередження', 'OPEN_LEAD'),
+        Markup.button.callback('⚙️ Налаштування', 'OPEN_SETTINGS')
+    ],
+    [Markup.button.callback('💛 Підтримати розробника', 'OPEN_DONATE')],
+    [Markup.button.url('🇺🇦 Донат на ЗСУ', 'https://send.monobank.ua/jar/2JbpBYkhMv')]
 ]);
 
 const refreshKeyboard = (day) => Markup.inlineKeyboard([
     [Markup.button.callback('Оновити', `REFRESH:${day}`)],
     [Markup.button.callback('Сьогодні', 'SHOW:today'), Markup.button.callback('Завтра', 'SHOW:tomorrow')],
-    [Markup.button.callback('Мої черги', 'SHOW:myqueues')],
-    [Markup.button.callback('Керувати чергами', 'MANAGE_QUEUES')],
-    [Markup.button.callback('⏳ Попередження', 'OPEN_LEAD')],
-    [Markup.button.callback('⚙️ Налаштування', 'OPEN_SETTINGS')],
     [
-        Markup.button.callback('💛 Підтримати розробника', 'OPEN_DONATE'),
-        Markup.button.url('🇺🇦 Донат на ЗСУ', 'https://send.monobank.ua/jar/2JbpBYkhMv'),
+        Markup.button.callback('Мої черги', 'SHOW:myqueues'),
+        Markup.button.callback('Керувати чергами', 'MANAGE_QUEUES')
     ],
+    [
+        Markup.button.callback('⏳ Попередження', 'OPEN_LEAD'),
+        Markup.button.callback('⚙️ Налаштування', 'OPEN_SETTINGS')
+    ],
+    [Markup.button.callback('💛 Підтримати розробника', 'OPEN_DONATE')],
+    [Markup.button.url('🇺🇦 Донат на ЗСУ', 'https://send.monobank.ua/jar/2JbpBYkhMv')]
 ]);
 
 const queuesKeyboard = (selectedQueues) => {

@@ -48,7 +48,8 @@ const shouldFireWithCatchup = (nowMinute, now, target, catchupMinutes) => {
 
 const normalizeIntervals = (payload) => {
     const outages = payload?.outages ?? [];
-    return Array.isArray(outages) ? outages : [];
+    if (!Array.isArray(outages)) return [];
+    return outages.filter((x) => !x?.shadow);
 };
 
 const createNotifier = ({ bot, listAllSubscriptions }) => {
