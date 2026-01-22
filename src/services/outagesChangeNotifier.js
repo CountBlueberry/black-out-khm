@@ -8,6 +8,31 @@ const { sha256 } = require('../utils/hash');
 const { isWithinQuietHours, KYIV_TZ } = require('../utils/quietHours');
 const { formatIntervalsShort, formatAdjustmentsShort } = require('../utils/outagesFormat');
 
+const buildTodayTomorrowKeyboard = () => ({
+    reply_markup: {
+        inline_keyboard: [
+            [
+                { text: 'Сьогодні', callback_data: 'SHOW:today' },
+                { text: 'Завтра', callback_data: 'SHOW:tomorrow' },
+            ],
+            [{ text: 'Меню', callback_data: 'BACK_MAIN' }],
+        ],
+    },
+});
+
+const buildCheckScheduleKeyboard = (day) => {
+    const dayLabel = day === 'tomorrow' ? 'Перевірити графік на завтра' : 'Перевірити графік на сьогодні';
+
+    return {
+        reply_markup: {
+            inline_keyboard: [
+                [{ text: dayLabel, callback_data: `SHOW:${day}` }],
+                [{ text: 'Меню', callback_data: 'BACK_MAIN' }],
+            ],
+        },
+    };
+};
+
 /**
  * Factory
  */
@@ -60,12 +85,11 @@ const createOutagesChangeNotifier = ({ bot, listAllSubscriptions }) => {
                     if (wasSent(eventId)) continue;
 
                     const label = date === today ? 'сьогодні' : 'завтра';
-
-                    await bot.telegram.sendMessage(
-                        chatId,
+                    const msg =
                         `⚠️ Увага! На ${label} з’явились погодинні відключення.\n` +
-                        `Натисни «${label === 'сьогодні' ? 'Сьогодні' : 'Завтра'}», щоб побачити свій графік.`
-                    );
+                        `Натисни кнопку нижче, щоб побачити свій графік.`;
+
+                    await bot.telegram.sendMessage(chatId, msg, buildTodayTomorrowKeyboard());
 
                     markSent({
                         eventId,
@@ -113,8 +137,7 @@ const createOutagesChangeNotifier = ({ bot, listAllSubscriptions }) => {
 
                 for (const c of list) {
                     const date = String(c?.date);
-                    const nextHash =
-                        String(c?.nextHash || sha256(JSON.stringify(c?.payload || {})));
+                    const nextHash = String(c?.nextHash || sha256(JSON.stringify(c?.payload || {})));
 
                     const eventId = `${chatId}|${queue}|${date}|QUEUE_CHANGE|${nextHash}`;
                     if (wasSent(eventId)) continue;
@@ -125,13 +148,8 @@ const createOutagesChangeNotifier = ({ bot, listAllSubscriptions }) => {
 
                     const appeared = !c?.prevHash;
 
-                    let header = appeared
-                        ? '✅ З’явились відключення'
-                        : '🔄 Графік оновлено';
-
-                    if (adjText && !appeared) {
-                        header = '⚠️ Оперативні зміни';
-                    }
+                    let header = appeared ? '✅ З’явились відключення' : '🔄 Графік оновлено';
+                    if (adjText && !appeared) header = '⚠️ Оперативні зміни';
 
                     const lines = [];
                     lines.push(header);
@@ -143,9 +161,10 @@ const createOutagesChangeNotifier = ({ bot, listAllSubscriptions }) => {
                     }
 
                     lines.push('');
-                    lines.push('Перевір «Сьогодні/Завтра» для деталей.');
+                    lines.push('Натисни кнопку нижче, щоб швидко перевірити графік.');
 
-                    await bot.telegram.sendMessage(chatId, lines.join('\n'));
+                    const day = date === tomorrow ? 'tomorrow' : 'today';
+                    await bot.telegram.sendMessage(chatId, lines.join('\n'), buildCheckScheduleKeyboard(day));
 
                     markSent({
                         eventId,
@@ -159,9 +178,7 @@ const createOutagesChangeNotifier = ({ bot, listAllSubscriptions }) => {
         }
     };
 
-    return {
-        handleJobResult,
-    };
+    return { handleJobResult };
 };
 
 module.exports = { createOutagesChangeNotifier };
