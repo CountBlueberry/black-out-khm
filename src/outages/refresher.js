@@ -7,7 +7,7 @@ const { fingerprintOutagesPage } = require('./fingerprint');
 const { parseOutagesFromHtml } = require('./outages');
 
 const OUTAGES_URL = 'https://hoe.com.ua/page/pogodinni-vidkljuchennja';
-const CACHE_KEY = 'outages_page_fingerprint';
+const CACHE_KEY = 'outages_page_fingerprint:v2';
 
 const sha256 = (s) =>
     crypto.createHash('sha256').update(String(s)).digest('hex');

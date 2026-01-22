@@ -2,13 +2,11 @@ const axios = require('axios');
 const cheerio = require('cheerio');
 
 const OUTAGES_URL = 'https://hoe.com.ua/page/pogodinni-vidkljuchennja';
+const { sanitizeTimeStr } = require('../utils/time');
+
+const normalizeTime = (t) => sanitizeTimeStr(t);
 
 const normalizeSpaces = (s) => String(s ?? '').replace(/\s+/g, ' ').trim();
-
-const normalizeTime = (t) => {
-    if (t === '24:00') return { time: '00:00', nextDay: true };
-    return { time: t, nextDay: false };
-};
 
 const kyivDateISO = (offsetDays = 0) => {
     const ms = Date.now() + offsetDays * 24 * 60 * 60 * 1000;
@@ -24,7 +22,6 @@ const kyivDateISO = (offsetDays = 0) => {
 const parseDateFromAlt = (alt) => {
     const t = String(alt ?? '').trim();
 
-    // "ГПВ-27.12.25" або "ГПВ-27.12.2025" або "ГПВ-18.01.26-"
     const m = t.match(/ГПВ-(\d{2})\.(\d{2})\.(\d{2}|\d{4})/i);
     if (!m) return null;
 
@@ -93,18 +90,18 @@ const parseAdjustmentLine = (line, sectionTitle) => {
     const queues = (text.match(/\d+\.\d+/g) || []).map((q) => String(q));
     if (queues.length === 0) return null;
 
-    const timeMatch = text.match(/(\d{2}:\d{2})/);
+    const timeMatch = text.match(/(\d{1,2}:\d{2})/);
     if (!timeMatch) return null;
 
-    const time = timeMatch[1];
+    const time = sanitizeTimeStr(timeMatch[1]).time;
 
     let kind = null;
 
-    if (/(заживлен)/i.test(lower) && /(розпоч)/i.test(lower) && /о\s*\d{2}:\d{2}/i.test(lower)) {
+    if (/(заживлен)/i.test(lower) && /(розпоч)/i.test(lower) && /о\s*\d{1,2}:\d{2}/i.test(lower)) {
         kind = 'power_on_at';
-    } else if (/(триватиме\s*до)/i.test(lower) || /\bдо\s*\d{2}:\d{2}\b/i.test(lower)) {
+    } else if (/(триватиме\s*до)/i.test(lower) || /\bдо\s*\d{1,2}:\d{2}\b/i.test(lower)) {
         kind = 'end_at';
-    } else if (/(розпоч)/i.test(lower) || /(знеструмлен)/i.test(lower) || /о\s*\d{2}:\d{2}/i.test(lower)) {
+    } else if (/(розпоч)/i.test(lower) || /(знеструмлен)/i.test(lower) || /о\s*\d{1,2}:\d{2}/i.test(lower)) {
         kind = 'start_at';
     }
 
@@ -189,7 +186,7 @@ const parseUlToSchedule = (ul) => {
         const queue = getQueue(text);
         if (!queue) return;
 
-        const reRange = /з\s*(\d{2}:\d{2})\s*до\s*(\d{2}:\d{2})/gi;
+        const reRange = /з\s*(\d{1,2}:\d{2})\s*до\s*(\d{1,2}:\d{2})/gi;
         const ranges = [];
 
         let m;
@@ -292,4 +289,3 @@ const getScheduleForQueue = async (queue) => {
 };
 
 module.exports = { getScheduleForQueue, kyivDateISO, parseOutagesFromHtml };
-
