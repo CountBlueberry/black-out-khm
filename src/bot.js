@@ -1,3 +1,5 @@
+require('dotenv').config();
+
 const { Telegraf } = require('telegraf');
 
 const { handleShowDay } = require('./handlers/showDay');
@@ -14,8 +16,6 @@ const { createOutagesChangeNotifier } = require('./services/outagesChangeNotifie
 
 const { migrate } = require('./db/db');
 migrate();
-
-require('dotenv').config();
 
 if (!process.env.BOT_TOKEN) {
     throw new Error('BOT_TOKEN is not set');
@@ -126,13 +126,13 @@ bot.command('lead', async (ctx) => {
     await ctx.reply(`Готово. Попереджатиму за ${prefs.leadMinutes} хв.`);
 });
 
-(async () => {
-    await bot.telegram.setMyCommands([
+bot.telegram
+    .setMyCommands([
         { command: 'today', description: 'Сьогодні' },
         { command: 'tomorrow', description: 'Завтра' },
         { command: 'myqueues', description: 'Мої черги' },
-    ]);
-})();
+    ])
+    .catch((e) => console.error('[setMyCommands] error:', e));
 
 bot.action('OPEN_SETTINGS', async (ctx) => {
     await ctx.answerCbQuery();
