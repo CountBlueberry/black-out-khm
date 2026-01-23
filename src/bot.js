@@ -124,14 +124,13 @@ bot.command('lead', async (ctx) => {
     await ctx.reply(`Готово. Попереджатиму за ${prefs.leadMinutes} хв.`);
 });
 
-bot.telegram.setMyCommands([
-    { command: 'today', description: 'Показати графік на сьогодні' },
-    { command: 'tomorrow', description: 'Показати графік на завтра' },
-    { command: 'myqueues', description: 'Мої черги' },
-    { command: 'subscribe', description: 'Підписатися на черги' },
-    { command: 'unsubscribe', description: 'Відписатися від черг' },
-    { command: 'lead', description: 'Налаштувати попередження' },
-]);
+(async () => {
+    await bot.telegram.setMyCommands([
+        { command: 'today', description: 'Сьогодні' },
+        { command: 'tomorrow', description: 'Завтра' },
+        { command: 'myqueues', description: 'Мої черги' },
+    ]);
+})();
 
 bot.action('OPEN_SETTINGS', async (ctx) => {
     await ctx.answerCbQuery();
